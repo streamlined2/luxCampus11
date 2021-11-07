@@ -1,6 +1,8 @@
 package org.training.campus.repository;
 
 import java.lang.reflect.Field;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.StringJoiner;
@@ -9,6 +11,7 @@ import org.training.campus.repository.annotation.Column;
 import org.training.campus.repository.annotation.Id;
 import org.training.campus.repository.annotation.Table;
 import org.training.campus.repository.entity.Person;
+import org.training.campus.repository.entity.Person.Sex;
 
 public class QueryGenerator {
 
@@ -76,10 +79,10 @@ public class QueryGenerator {
 		String primaryKey = getEntityPrimaryKeyFieldName(cl);
 		var properties = getEntityPropertyNames(cl);
 		var join = new StringJoiner(",");
-		if(primaryKey!=null) {
+		if (primaryKey != null) {
 			join.add(primaryKey);
 		}
-		properties.forEach(property -> join.add(property));
+		properties.forEach(join::add);
 		return String.format("select %s from %s;", join.toString(), tableName);
 	}
 
@@ -96,6 +99,45 @@ public class QueryGenerator {
 	}
 
 	public <T> String getById(Class<T> cl, Object id) {
+		String tableName = getEntityTable(cl);
+		String primaryKey = getEntityPrimaryKeyFieldName(cl);
+		var properties = getEntityPropertyNames(cl);
+		var join = new StringJoiner(",");
+		if (primaryKey != null) {
+			join.add(primaryKey);
+		}
+		properties.forEach(join::add);
+		Object primKeyValue = convertToSQLLiteral(id);
+		if(primKeyValue==null) throw new IllegalArgumentException("primary key value parameter shouldn't be null");
+		return String.format("select %s from %s where %s=%s;", join.toString(), tableName, primaryKey, primKeyValue);
+	}
+
+	private static String convertToSQLLiteral(Object value) {
+		Class<?> type = value.getClass();
+		if (type == long.class || type == Long.class) {
+			return Long.toString((long) value);
+		} else if (type == int.class || type == Integer.class) {
+			return Integer.toString((int) value);
+		} else if (type == short.class || type == Short.class) {
+			return Short.toString((short) value);
+		} else if (type == byte.class || type == Byte.class) {
+			return Byte.toString((byte) value);
+		} else if (type == float.class || type == Float.class) {
+			return Float.toString((float) value);
+		} else if (type == double.class || type == Double.class) {
+			return Double.toString((double) value);
+		} else if (type == char.class || type == Character.class) {
+			return Character.toString((char) value);
+		} else if (type == boolean.class || type == Boolean.class) {
+			return Boolean.toString((boolean) value);
+		} else if (type.isEnum()) {
+			return "'" + Enum.class.cast(value).name() + "'";
+		} else if (type == String.class) {
+			return "'" + value + "'";
+		} else if (type == LocalDate.class) {
+			LocalDate date = (LocalDate) value;
+			return "'" + date.format(DateTimeFormatter.ISO_DATE) + "'";
+		}
 		return null;
 	}
 
@@ -103,7 +145,8 @@ public class QueryGenerator {
 		// System.out.println(getTableForEntity(Person.class));
 		// System.out.println(getEntityPrimaryKeyFieldName(Person.class));
 		// System.out.println(getEntityPropertyNames(Person.class));
-		System.out.println(QueryGenerator.getInstance().getAll(Person.class));
+		// System.out.println(QueryGenerator.getInstance().getAll(Person.class));
+		System.out.println(QueryGenerator.getInstance().getById(Person.class, 1L));
 	}
 
 }
