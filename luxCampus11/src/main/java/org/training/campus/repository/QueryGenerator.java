@@ -3,6 +3,7 @@ package org.training.campus.repository;
 import java.lang.reflect.Field;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.StringJoiner;
 
 import org.training.campus.repository.annotation.Column;
 import org.training.campus.repository.annotation.Id;
@@ -20,7 +21,7 @@ public class QueryGenerator {
 		return instance;
 	}
 
-	private static <T> String getTableForEntity(Class<T> cl) {
+	private static <T> String getEntityTable(Class<T> cl) {
 		String tableName = cl.getSimpleName().toLowerCase();
 		Table anno = cl.getAnnotation(Table.class);
 		if (anno != null) {
@@ -71,7 +72,15 @@ public class QueryGenerator {
 	}
 
 	public <T> String getAll(Class<T> cl) {
-		return null;
+		String tableName = getEntityTable(cl);
+		String primaryKey = getEntityPrimaryKeyFieldName(cl);
+		var properties = getEntityPropertyNames(cl);
+		var join = new StringJoiner(",");
+		if(primaryKey!=null) {
+			join.add(primaryKey);
+		}
+		properties.forEach(property -> join.add(property));
+		return String.format("select %s from %s;", join.toString(), tableName);
 	}
 
 	public <T> String insert(Class<T> cl, T value) {
@@ -94,6 +103,7 @@ public class QueryGenerator {
 		// System.out.println(getTableForEntity(Person.class));
 		// System.out.println(getEntityPrimaryKeyFieldName(Person.class));
 		// System.out.println(getEntityPropertyNames(Person.class));
+		System.out.println(QueryGenerator.getInstance().getAll(Person.class));
 	}
 
 }
