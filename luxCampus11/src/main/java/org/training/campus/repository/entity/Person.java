@@ -1,6 +1,7 @@
 package org.training.campus.repository.entity;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 import org.training.campus.repository.annotation.Column;
 import org.training.campus.repository.annotation.Id;
@@ -54,6 +55,83 @@ public class Person {
 
 	public void setId(long id) {
 		this.id = id;
+	}
+
+	public String getSsn() {
+		return ssn;
+	}
+
+	public void setSsn(String ssn) {
+		this.ssn = ssn;
+	}
+
+	public String getFirstname() {
+		return firstname;
+	}
+
+	public void setFirstname(String firstname) {
+		this.firstname = firstname;
+	}
+
+	public String getLastname() {
+		return lastname;
+	}
+
+	public void setLastname(String lastname) {
+		this.lastname = lastname;
+	}
+
+	public LocalDate getBirthDate() {
+		return birthDate;
+	}
+
+	public void setBirthDate(LocalDate birthDate) {
+		this.birthDate = birthDate;
+	}
+
+	public Sex getSex() {
+		return sex;
+	}
+
+	public void setSex(Sex sex) {
+		this.sex = sex;
+	}
+
+	public int getHeight() {
+		return height;
+	}
+
+	public void setHeight(int height) {
+		this.height = height;
+	}
+
+	public int getWeight() {
+		return weight;
+	}
+
+	public void setWeight(int weight) {
+		this.weight = weight;
+	}
+
+	public Color getEyeColor() {
+		return eyeColor;
+	}
+
+	public void setEyeColor(Color eyeColor) {
+		this.eyeColor = eyeColor;
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if(o instanceof Person p) {
+			return Objects.equals(id, p.id);			
+		}
+		return false;
+	}
+	
+	@Override
+	public int hashCode() {
+		return Objects.hash(id);
 	}
 
 }
