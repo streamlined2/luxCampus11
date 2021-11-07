@@ -57,9 +57,10 @@ class QueryGeneratorTest {
 	@Test
 	void testDelete() {
 		final String expected = """
-				delete from person where id=1;
-				""";
-		final String actual = QueryGenerator.getInstance().delete(Person.class, 1);
+				delete from person where id=1;""";
+		final String actual = QueryGenerator.getInstance().delete(Person.class, 1L);
+		System.out.println(actual);
+		System.out.println(expected);
 		assertEquals(expected, actual);
 	}
 

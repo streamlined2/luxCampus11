@@ -95,7 +95,11 @@ public class QueryGenerator {
 	}
 
 	public <T> String delete(Class<T> cl, Object id) {
-		return null;
+		String tableName = getEntityTable(cl);
+		String primaryKey = getEntityPrimaryKeyFieldName(cl);
+		Object primKeyValue = convertToSQLLiteral(id);
+		if(primKeyValue==null) throw new IllegalArgumentException("primary key value parameter shouldn't be null");
+		return String.format("delete from %s where %s=%s;", tableName, primaryKey, primKeyValue);
 	}
 
 	public <T> String getById(Class<T> cl, Object id) {
@@ -146,7 +150,8 @@ public class QueryGenerator {
 		// System.out.println(getEntityPrimaryKeyFieldName(Person.class));
 		// System.out.println(getEntityPropertyNames(Person.class));
 		// System.out.println(QueryGenerator.getInstance().getAll(Person.class));
-		System.out.println(QueryGenerator.getInstance().getById(Person.class, 1L));
+		//System.out.println(QueryGenerator.getInstance().getById(Person.class, 1L));
+		System.out.println(QueryGenerator.getInstance().delete(Person.class, 1L));
 	}
 
 }
