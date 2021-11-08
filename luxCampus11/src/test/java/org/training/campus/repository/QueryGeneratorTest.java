@@ -34,10 +34,7 @@ class QueryGeneratorTest {
 				Color.BLUE);
 		person.setId(1);
 		final String expected = """
-				update person set
-				ssn='0123456789',firstname='John',lastname='Smith',birthDate='2000-01-01',sex='MALE',height=180,weight=80,eyeColor='BLUE'
-				where id=1;
-				""";
+				update person set ssn='0123456789',firstname='John',lastname='Smith',birthDate='2000-01-01',sex='MALE',height=180,weight=80,eyeColor='BLUE' where id=1;""";
 		final String actual = QueryGenerator.getInstance().update(Person.class, person);
 		assertEquals(expected, actual);
 	}

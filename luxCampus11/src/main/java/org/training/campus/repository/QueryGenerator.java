@@ -10,6 +10,7 @@ import java.util.StringJoiner;
 import org.training.campus.repository.annotation.Column;
 import org.training.campus.repository.annotation.Id;
 import org.training.campus.repository.annotation.Table;
+import org.training.campus.repository.entity.Entity;
 import org.training.campus.repository.entity.Person;
 import org.training.campus.repository.entity.Person.Color;
 import org.training.campus.repository.entity.Person.Sex;
@@ -37,7 +38,7 @@ public class QueryGenerator {
 		return tableName;
 	}
 
-	private static <T> String getEntityPrimaryKeyFieldName(Class<T> cl) {
+	private static <T> String getPrimaryKeyFieldName(Class<T> cl) {
 		Field[] fields = cl.getDeclaredFields();
 		for (Field field : fields) {
 			Id anno = field.getAnnotation(Id.class);
@@ -50,12 +51,31 @@ public class QueryGenerator {
 			}
 		}
 		if (cl.getSuperclass() != null) {
-			return getEntityPrimaryKeyFieldName(cl.getSuperclass());
+			return getPrimaryKeyFieldName(cl.getSuperclass());
 		}
 		return null;
 	}
 
-	private static <T> List<String> getEntityPropertyNames(Class<T> cl) {
+	private static <T> Object getPrimaryKeyValue(Class<T> cl, Object entity) {
+		Field[] fields = cl.getDeclaredFields();
+		for (Field field : fields) {
+			Id anno = field.getAnnotation(Id.class);
+			if (anno != null) {
+				try {
+					field.setAccessible(true);
+					return field.get(entity);
+				} catch (IllegalArgumentException | IllegalAccessException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		if (cl.getSuperclass() != null) {
+			return getPrimaryKeyFieldName(cl.getSuperclass());
+		}
+		return null;
+	}
+
+	private static <T> List<String> getPropertyNames(Class<T> cl) {
 		List<String> properties = new LinkedList<>();
 		Field[] fields = cl.getDeclaredFields();
 		for (Field field : fields) {
@@ -70,12 +90,12 @@ public class QueryGenerator {
 			}
 		}
 		if (cl.getSuperclass() != null) {
-			properties.addAll(getEntityPropertyNames(cl.getSuperclass()));
+			properties.addAll(getPropertyNames(cl.getSuperclass()));
 		}
 		return properties;
 	}
 
-	private static <T> List<Object> getEntityPropertyValues(Class<T> cl, Object entity) {
+	private static <T> List<Object> getPropertyValues(Class<T> cl, Object entity) {
 		List<Object> properties = new LinkedList<>();
 		Field[] fields = cl.getDeclaredFields();
 		for (Field field : fields) {
@@ -91,15 +111,15 @@ public class QueryGenerator {
 			}
 		}
 		if (cl.getSuperclass() != null) {
-			properties.addAll(getEntityPropertyNames(cl.getSuperclass()));
+			properties.addAll(getPropertyNames(cl.getSuperclass()));
 		}
 		return properties;
 	}
 
 	public <T> String getAll(Class<T> cl) {
 		String tableName = getEntityTable(cl);
-		String primaryKey = getEntityPrimaryKeyFieldName(cl);
-		var properties = getEntityPropertyNames(cl);
+		String primaryKey = getPrimaryKeyFieldName(cl);
+		var properties = getPropertyNames(cl);
 		var join = new StringJoiner(",");
 		if (primaryKey != null) {
 			join.add(primaryKey);
@@ -110,22 +130,36 @@ public class QueryGenerator {
 
 	public <T> String insert(Class<T> cl, T entity) {
 		String tableName = getEntityTable(cl);
-		var properties = getEntityPropertyNames(cl);
+		var properties = getPropertyNames(cl);
 		var join = new StringJoiner(",");
 		properties.forEach(join::add);
-		var propertyValues = getEntityPropertyValues(cl, entity);
+		var propertyValues = getPropertyValues(cl, entity);
 		var valueJoin = new StringJoiner(",");
 		propertyValues.forEach(value -> valueJoin.add(convertToSQLLiteral(value)));
 		return String.format("insert into %s (%s) values (%s);", tableName, join.toString(), valueJoin.toString());
 	}
 
 	public <T> String update(Class<T> cl, T entity) {
-		return null;
+		String tableName = getEntityTable(cl);
+		String primaryKey = getPrimaryKeyFieldName(cl);
+		var properties = getPropertyNames(cl);
+		var propertyValues = getPropertyValues(cl, entity);
+		var join = new StringJoiner(",");
+		var valueIterator = propertyValues.iterator();
+		for (String property : properties) {
+			if (!valueIterator.hasNext())
+				break;
+			join.add(property+"="+convertToSQLLiteral(valueIterator.next()));
+		}
+		Object primKeyValue = convertToSQLLiteral(getPrimaryKeyValue(cl, entity));
+		if (primKeyValue == null)
+			throw new IllegalArgumentException("primary key value parameter shouldn't be null");
+		return String.format("update %s set %s where %s=%s;", tableName, join.toString(), primaryKey, primKeyValue);
 	}
 
 	public <T> String delete(Class<T> cl, Object id) {
 		String tableName = getEntityTable(cl);
-		String primaryKey = getEntityPrimaryKeyFieldName(cl);
+		String primaryKey = getPrimaryKeyFieldName(cl);
 		Object primKeyValue = convertToSQLLiteral(id);
 		if (primKeyValue == null)
 			throw new IllegalArgumentException("primary key value parameter shouldn't be null");
@@ -134,8 +168,8 @@ public class QueryGenerator {
 
 	public <T> String getById(Class<T> cl, Object id) {
 		String tableName = getEntityTable(cl);
-		String primaryKey = getEntityPrimaryKeyFieldName(cl);
-		var properties = getEntityPropertyNames(cl);
+		String primaryKey = getPrimaryKeyFieldName(cl);
+		var properties = getPropertyNames(cl);
 		var join = new StringJoiner(",");
 		if (primaryKey != null) {
 			join.add(primaryKey);
@@ -185,8 +219,11 @@ public class QueryGenerator {
 		// System.out.println(QueryGenerator.getInstance().getAll(Person.class));
 		// System.out.println(QueryGenerator.getInstance().getById(Person.class, 1L));
 		// System.out.println(QueryGenerator.getInstance().delete(Person.class, 1L));
-		System.out.println(QueryGenerator.getInstance().insert(Person.class,
-				new Person("0123456789", "John", "Smith", LocalDate.of(2000, 01, 01), Sex.MALE, 180, 80, Color.BLUE)));
+		//System.out.println(QueryGenerator.getInstance().insert(Person.class,
+		//		new Person("0123456789", "John", "Smith", LocalDate.of(2000, 01, 01), Sex.MALE, 180, 80, Color.BLUE)));
+		Person person = new Person("0123456789", "John", "Smith", LocalDate.of(2000, 01, 01), Sex.MALE, 180, 80, Color.BLUE);
+		person.setId(1L);
+		System.out.println(QueryGenerator.getInstance().update(Person.class,person));
 	}
 
 }

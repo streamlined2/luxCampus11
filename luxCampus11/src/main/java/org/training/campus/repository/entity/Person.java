@@ -48,7 +48,7 @@ public class Person {
 		this.weight = weight;
 		this.eyeColor = eyeColor;
 	}
-
+	
 	public long getId() {
 		return id;
 	}
