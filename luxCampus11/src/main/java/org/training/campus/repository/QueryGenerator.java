@@ -1,16 +1,18 @@
 package org.training.campus.repository;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.StringJoiner;
 
 import org.training.campus.repository.annotation.Column;
 import org.training.campus.repository.annotation.Id;
 import org.training.campus.repository.annotation.Table;
-import org.training.campus.repository.entity.Entity;
 import org.training.campus.repository.entity.Person;
 import org.training.campus.repository.entity.Person.Color;
 import org.training.campus.repository.entity.Person.Sex;
@@ -38,7 +40,48 @@ public class QueryGenerator {
 		return tableName;
 	}
 
-	private static <T> String getPrimaryKeyFieldName(Class<T> cl) {
+	private static class AnnotatedFieldIterator implements Iterator<Field> {
+		private final Field[] fields;
+		private final Class<? extends Annotation> annoClass;
+		private int index;
+
+		private AnnotatedFieldIterator(Class<?> entityClass, Class<? extends Annotation> annoClass) {
+			fields = entityClass.getDeclaredFields();
+			this.annoClass = annoClass;
+			index = 0;
+		}
+
+		private int findNextElement() {
+			int probe = index;
+			while (probe < fields.length) {
+				Object anno = fields[probe].getAnnotation(annoClass);
+				if (anno != null) {
+					return probe;
+				}
+				probe++;
+			}
+			return -1;
+		}
+
+		@Override
+		public boolean hasNext() {
+			return findNextElement() != -1;
+		}
+
+		@Override
+		public Field next() {
+			int probe = findNextElement();
+			if(probe==-1) {
+				throw new NoSuchElementException("no more elements, iterator exhausted");
+			}else {
+				index = probe + 1;
+				return fields[probe];				
+			}
+		}
+
+	}
+
+	private static <T> String getPrimaryKeyField(Class<T> cl) {
 		Field[] fields = cl.getDeclaredFields();
 		for (Field field : fields) {
 			Id anno = field.getAnnotation(Id.class);
@@ -51,26 +94,24 @@ public class QueryGenerator {
 			}
 		}
 		if (cl.getSuperclass() != null) {
-			return getPrimaryKeyFieldName(cl.getSuperclass());
+			return getPrimaryKeyField(cl.getSuperclass());
 		}
 		return null;
 	}
 
 	private static <T> Object getPrimaryKeyValue(Class<T> cl, Object entity) {
-		Field[] fields = cl.getDeclaredFields();
-		for (Field field : fields) {
-			Id anno = field.getAnnotation(Id.class);
-			if (anno != null) {
-				try {
-					field.setAccessible(true);
-					return field.get(entity);
-				} catch (IllegalArgumentException | IllegalAccessException e) {
-					e.printStackTrace();
-				}
+		var i = new AnnotatedFieldIterator(cl, Id.class);
+		while (i.hasNext()) {
+			Field field = i.next();
+			try {
+				field.setAccessible(true);
+				return field.get(entity);
+			} catch (IllegalArgumentException | IllegalAccessException e) {
+				e.printStackTrace();
 			}
 		}
 		if (cl.getSuperclass() != null) {
-			return getPrimaryKeyFieldName(cl.getSuperclass());
+			return getPrimaryKeyValue(cl.getSuperclass(), entity);
 		}
 		return null;
 	}
@@ -97,28 +138,26 @@ public class QueryGenerator {
 
 	private static <T> List<Object> getPropertyValues(Class<T> cl, Object entity) {
 		List<Object> properties = new LinkedList<>();
-		Field[] fields = cl.getDeclaredFields();
-		for (Field field : fields) {
-			Column anno = field.getAnnotation(Column.class);
-			if (anno != null) {
-				String propertyName = field.getName();
-				try {
-					field.setAccessible(true);
-					properties.add(field.get(entity));
-				} catch (IllegalArgumentException | IllegalAccessException e) {
-					e.printStackTrace();
-				}
+		var i = new AnnotatedFieldIterator(cl, Column.class);
+		while (i.hasNext()) {
+			Field field = i.next();
+			String propertyName = field.getName();
+			try {
+				field.setAccessible(true);
+				properties.add(field.get(entity));
+			} catch (IllegalArgumentException | IllegalAccessException e) {
+				e.printStackTrace();
 			}
 		}
 		if (cl.getSuperclass() != null) {
-			properties.addAll(getPropertyNames(cl.getSuperclass()));
+			properties.addAll(getPropertyValues(cl.getSuperclass(), entity));
 		}
 		return properties;
 	}
 
 	public <T> String getAll(Class<T> cl) {
 		String tableName = getEntityTable(cl);
-		String primaryKey = getPrimaryKeyFieldName(cl);
+		String primaryKey = getPrimaryKeyField(cl);
 		var properties = getPropertyNames(cl);
 		var join = new StringJoiner(",");
 		if (primaryKey != null) {
@@ -141,7 +180,7 @@ public class QueryGenerator {
 
 	public <T> String update(Class<T> cl, T entity) {
 		String tableName = getEntityTable(cl);
-		String primaryKey = getPrimaryKeyFieldName(cl);
+		String primaryKey = getPrimaryKeyField(cl);
 		var properties = getPropertyNames(cl);
 		var propertyValues = getPropertyValues(cl, entity);
 		var join = new StringJoiner(",");
@@ -149,7 +188,7 @@ public class QueryGenerator {
 		for (String property : properties) {
 			if (!valueIterator.hasNext())
 				break;
-			join.add(property+"="+convertToSQLLiteral(valueIterator.next()));
+			join.add(property + "=" + convertToSQLLiteral(valueIterator.next()));
 		}
 		Object primKeyValue = convertToSQLLiteral(getPrimaryKeyValue(cl, entity));
 		if (primKeyValue == null)
@@ -159,7 +198,7 @@ public class QueryGenerator {
 
 	public <T> String delete(Class<T> cl, Object id) {
 		String tableName = getEntityTable(cl);
-		String primaryKey = getPrimaryKeyFieldName(cl);
+		String primaryKey = getPrimaryKeyField(cl);
 		Object primKeyValue = convertToSQLLiteral(id);
 		if (primKeyValue == null)
 			throw new IllegalArgumentException("primary key value parameter shouldn't be null");
@@ -168,7 +207,7 @@ public class QueryGenerator {
 
 	public <T> String getById(Class<T> cl, Object id) {
 		String tableName = getEntityTable(cl);
-		String primaryKey = getPrimaryKeyFieldName(cl);
+		String primaryKey = getPrimaryKeyField(cl);
 		var properties = getPropertyNames(cl);
 		var join = new StringJoiner(",");
 		if (primaryKey != null) {
@@ -213,17 +252,17 @@ public class QueryGenerator {
 	}
 
 	public static void main(String[] args) {
-		// System.out.println(getTableForEntity(Person.class));
-		// System.out.println(getEntityPrimaryKeyFieldName(Person.class));
-		// System.out.println(getEntityPropertyNames(Person.class));
-		// System.out.println(QueryGenerator.getInstance().getAll(Person.class));
-		// System.out.println(QueryGenerator.getInstance().getById(Person.class, 1L));
-		// System.out.println(QueryGenerator.getInstance().delete(Person.class, 1L));
-		//System.out.println(QueryGenerator.getInstance().insert(Person.class,
-		//		new Person("0123456789", "John", "Smith", LocalDate.of(2000, 01, 01), Sex.MALE, 180, 80, Color.BLUE)));
-		Person person = new Person("0123456789", "John", "Smith", LocalDate.of(2000, 01, 01), Sex.MALE, 180, 80, Color.BLUE);
+		System.out.println(getEntityTable(Person.class));
+		System.out.println(getPrimaryKeyField(Person.class));
+		System.out.println(getPropertyNames(Person.class));
+		System.out.println(QueryGenerator.getInstance().getAll(Person.class));
+		System.out.println(QueryGenerator.getInstance().getById(Person.class, 1L));
+		System.out.println(QueryGenerator.getInstance().delete(Person.class, 1L));
+		Person person = new Person("0123456789", "John", "Smith", LocalDate.of(2000, 01, 01), Sex.MALE, 180, 80,
+				Color.BLUE);
 		person.setId(1L);
-		System.out.println(QueryGenerator.getInstance().update(Person.class,person));
+		System.out.println(QueryGenerator.getInstance().insert(Person.class, person));
+		System.out.println(QueryGenerator.getInstance().update(Person.class, person));
 	}
 
 }
